@@ -2,3 +2,4 @@ diffusers[torch]
 pillow
 transformers
 tkinterdnd2
+tqdm

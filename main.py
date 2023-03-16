@@ -9,6 +9,8 @@ from diffusers import StableDiffusionInpaintPipeline
 import threading
 import subprocess
 from tkinterdnd2 import DND_FILES, TkinterDnD
+from tqdm import tqdm
+import sys
 
 
 def get_device():
@@ -26,6 +28,22 @@ def get_device():
 
 device = get_device()
 
+
+class ProgressCapture:
+    def __init__(self, progress_callback):
+        self.progress_callback = progress_callback
+
+    def write(self, text):
+        if text.startswith(" "):
+            progress = text.strip().split("|")[0].rstrip("%")
+            try:
+                progress = float(progress)
+                self.progress_callback(progress)
+            except ValueError:
+                pass
+
+    def flush(self):
+        pass
 
 
 # Function to center the image on the canvas
@@ -119,30 +137,36 @@ def draw_mask(event):
         temp_img.paste(mask_image, (0, 0), mask_image)
         display_image_on_canvas(temp_img)
 
-
+def progress_callback(progress):
+    progress_var.set(progress)
+    root.update_idletasks()
+    
 def inpaint_image():
     inpaint_button.config(state=tk.DISABLED)
     prompt_text = prompt_entry.get()
     threading.Thread(target=perform_inpainting, args=(prompt_text,)).start()
 
 
-def perform_inpainting(prompt_text):
+def perform_inpainting():
+    inpaint_button.config(state=tk.DISABLED)
+    prompt_text = prompt_entry.get()
+    threading.Thread(target=perform_inpainting_thread, args=(prompt_text,)).start()
+
+def perform_inpainting_thread(prompt_text):
     pipe = StableDiffusionInpaintPipeline.from_pretrained(
         "runwayml/stable-diffusion-inpainting",
-        # revision="fp16",
-        #torch_dtype=torch.float16,
     )
 
-    # start_time = time.time()
-    # duration = 15  # Approximate duration of the inpainting process in seconds
-    # for i in range(1, duration + 1):
-    #     update_progress_bar(i / duration)
-    #     time.sleep(1)
+    # Set up the custom stdout to capture progress
+    original_stdout = sys.stdout
+    sys.stdout = ProgressCapture(progress_callback)
 
     resized_image, resized_mask = resize_image_and_mask(original_image, mask_image)
     resized_mask = match_mask_size(resized_image, resized_mask)
     result = pipe(prompt=prompt_text, image=resized_image, mask_image=resized_mask).images[0]
-    # update_progress_bar(1)
+
+    # Restore the original stdout
+    sys.stdout = original_stdout
 
     os.makedirs("out", exist_ok=True)
     unique_filename = f"result_{int(time.time())}.png"
@@ -152,10 +176,31 @@ def perform_inpainting(prompt_text):
     display_image_on_canvas(result)
     inpaint_button.config(state=tk.NORMAL)
 
-    if os.name == 'nt':
+    # Open the image with the default image viewer
+    if os.name == 'posix':
+        subprocess.call(('xdg-open', result_path))
+    elif os.name == 'nt':
         os.startfile(result_path)
     else:
         subprocess.call(('open', result_path))
+
+
+def reset_application():
+    global original_image, mask_image, mask_draw
+    original_image = None
+    mask_image = Image.new("1", (canvas.winfo_width(), canvas.winfo_height()), 0)
+    mask_draw = ImageDraw.Draw(mask_image)
+    display_placeholder_text()
+
+
+def clear_mask():
+    global mask_image, mask_draw
+    mask_image = Image.new("1", (canvas.winfo_width(), canvas.winfo_height()), 0)
+    mask_draw = ImageDraw.Draw(mask_image)
+    if original_image:
+        display_image_on_canvas(original_image)
+
+
 
 # Initialize the Tkinter window and canvas
 root = TkinterDnD.Tk()
@@ -163,16 +208,35 @@ root.title("Image Inpainting")
 canvas = tk.Canvas(root, width=800, height=600)
 canvas.pack()
 
+progress_frame = tk.Frame(root)
+progress_frame.pack(side=tk.TOP, fill=tk.X)
+
+progress_label = tk.Label(progress_frame, text="Progress:")
+progress_label.pack(side=tk.LEFT)
+
+progress_var = tk.DoubleVar()
+progress_bar = ttk.Progressbar(progress_frame, variable=progress_var, maximum=100)
+progress_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+
 # Add buttons
+button_frame = tk.Frame(root)
+button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+
 load_button = tk.Button(root, text="Load Image", command=load_image)
 load_button.pack(side=tk.LEFT)
-inpaint_button = tk.Button(root, text="Inpaint Image", command=inpaint_image)
+
+reset_button = tk.Button(button_frame, text="Reset", command=reset_application)
+reset_button.grid(row=0, column=0, sticky=tk.N)
+clear_mask_button = tk.Button(button_frame, text="Clear Mask", command=clear_mask)
+clear_mask_button.grid(row=1, column=0, sticky=tk.N)
+
+inpaint_button = tk.Button(root, text="Inpaint Image", command=perform_inpainting)
 inpaint_button.pack(side=tk.RIGHT)
 
 # Add prompt entry field
 prompt_label = tk.Label(root, text="Inpainting prompt:")
 prompt_label.pack(side=tk.LEFT)
-prompt_entry = tk.Entry(root)
+prompt_entry = tk.Entry(root, width=50)
 prompt_entry.pack(side=tk.LEFT)
 
 # Initialize the original image, mask image, and mask drawing
@@ -184,12 +248,6 @@ brush_size = 10
 # Bind the mouse events to draw the mask
 canvas.bind("<B1-Motion>", draw_mask)
 
-# Add progress bar
-progress_label = tk.Label(root, text="Progress:")
-progress_label.pack(side=tk.LEFT)
-progress_var = tk.DoubleVar()
-progress_bar = ttk.Progressbar(root, variable=progress_var, maximum=100)
-progress_bar.pack(side=tk.LEFT)
 
 root.drop_target_register(DND_FILES)
 root.dnd_bind('<<Drop>>', drop)
