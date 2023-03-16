@@ -10,12 +10,31 @@ import threading
 import subprocess
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
+
+def get_device():
+    if torch.cuda.is_available():
+        print("cuda")
+        return torch.device("cuda")
+    try:
+        print("a pole silicon")
+        _ = torch.ones(1, device="mps")
+        return torch.device("mps")
+    except RuntimeError:
+        print("falling back cpu")
+        return torch.device("cpu")
+
+
+device = get_device()
+
+
+
 # Function to center the image on the canvas
 def center_image_on_canvas(img):
     width, height = img.size
     x_offset = (canvas.winfo_width() - width) // 2
     y_offset = (canvas.winfo_height() - height) // 2
     return x_offset, y_offset
+
 
 # Function to display the image on the canvas
 def display_image_on_canvas(img):
@@ -24,7 +43,7 @@ def display_image_on_canvas(img):
     canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=canvas_image)
     canvas.image = canvas_image
 
-# Function to display placeholder text on the canvas
+
 def display_placeholder_text():
     canvas.delete("all")
     text = "Drop an image or click the 'Load Image' button."
@@ -34,60 +53,59 @@ def match_mask_size(image, mask):
     image_width, image_height = image.size
     mask_width, mask_height = mask.size
     
-    # Calculate the scaling factors
     width_factor = image_width / mask_width
     height_factor = image_height / mask_height
     
-    # Calculate the new mask dimensions
     new_mask_width = int(mask_width * width_factor)
     new_mask_height = int(mask_height * height_factor)
     
-    # Resize the mask
     resized_mask = mask.resize((new_mask_width, new_mask_height), Image.ANTIALIAS)
     
     return resized_mask
 
 
 def resize_image_and_mask(image, mask, target_size=(512, 512)):
-    resized_image = image.resize(target_size, Image.ANTIALIAS)
-    resized_mask = mask.resize(target_size, Image.ANTIALIAS)
+    def resize_with_aspect_ratio_fill(img, target_size):
+        img_width, img_height = img.size
+        target_width, target_height = target_size
+
+        aspect_ratio = min(target_width / img_width, target_height / img_height)
+        new_width = int(img_width * aspect_ratio)
+        new_height = int(img_height * aspect_ratio)
+
+        resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+        result_img = Image.new(img.mode, target_size, color=0 if img.mode == '1' else (255, 255, 255))
+
+        x_offset = (target_width - new_width) // 2
+        y_offset = (target_height - new_height) // 2
+        result_img.paste(resized_img, (x_offset, y_offset))
+
+        return result_img
+
+    resized_image = resize_with_aspect_ratio_fill(image, target_size)
+    resized_mask = resize_with_aspect_ratio_fill(mask, target_size)
     return resized_image, resized_mask
 
 
-def resize_with_aspect_ratio(image, target_size, divisor=8):
-    width, height = image.size
-    target_width, target_height = target_size
-
-    # Calculate the new size while maintaining the aspect ratio
-    aspect_ratio = min(target_width / width, target_height / height)
-    new_width = int(width * aspect_ratio)
-    new_height = int(height * aspect_ratio)
-
-    # Round the new width and height to the nearest multiple of the divisor
-    new_width = (new_width + divisor // 2) // divisor * divisor
-    new_height = (new_height + divisor // 2) // divisor * divisor
-
-    # Resize the image and return it
-    return image.resize((new_width, new_height), Image.ANTIALIAS)
-
-
-def load_image():
-    file_path = filedialog.askopenfilename()
+def load_image(file_path=None):
+    if not file_path:
+        file_path = filedialog.askopenfilename()
     if file_path:
         global original_image, mask_image, mask_draw
         original_image = Image.open(file_path).convert("RGB")
-        original_image = resize_with_aspect_ratio(original_image, (canvas.winfo_width(), canvas.winfo_height()))
+        original_image, mask_image = resize_image_and_mask(original_image, mask_image, (canvas.winfo_width(), canvas.winfo_height()))
 
-        mask_image = Image.new("1", original_image.size, 0)
         mask_draw = ImageDraw.Draw(mask_image)
 
         display_image_on_canvas(original_image)
 
 
+
 # Drag and drop callback
 def drop(event):
     if event.data:
-        load_image(event.data)
+        load_image(event.data[0])
+
 
 def draw_mask(event):
     x, y = event.x, event.y
@@ -102,14 +120,12 @@ def draw_mask(event):
         display_image_on_canvas(temp_img)
 
 
-# Function to start the inpainting process
 def inpaint_image():
     inpaint_button.config(state=tk.DISABLED)
     prompt_text = prompt_entry.get()
     threading.Thread(target=perform_inpainting, args=(prompt_text,)).start()
 
 
-# Function to perform inpainting and update the progress bar
 def perform_inpainting(prompt_text):
     pipe = StableDiffusionInpaintPipeline.from_pretrained(
         "runwayml/stable-diffusion-inpainting",
@@ -136,10 +152,7 @@ def perform_inpainting(prompt_text):
     display_image_on_canvas(result)
     inpaint_button.config(state=tk.NORMAL)
 
-    # Open the image with the default image viewer
-    if os.name == 'posix':
-        subprocess.call(('xdg-open', result_path))
-    elif os.name == 'nt':
+    if os.name == 'nt':
         os.startfile(result_path)
     else:
         subprocess.call(('open', result_path))
