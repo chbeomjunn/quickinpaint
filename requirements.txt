@@ -1,0 +1,4 @@
+diffusers[torch]
+pillow
+transformers
+tkinterdnd2
