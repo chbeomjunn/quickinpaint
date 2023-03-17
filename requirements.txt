@@ -3,3 +3,4 @@ pillow
 transformers
 tkinterdnd2
 tqdm
+sv-ttk
