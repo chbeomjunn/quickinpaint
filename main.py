@@ -186,6 +186,38 @@ def reset_application():
     last_x, last_y = None, None
 
 
+def resize_image_to_fit_canvas(img, target_size):
+    img_width, img_height = img.size
+    target_width, target_height = target_size
+
+    aspect_ratio = max(target_width / img_width, target_height / img_height)
+    new_width = int(img_width * aspect_ratio)
+    new_height = int(img_height * aspect_ratio)
+
+    resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+    return resized_img
+
+
+def resize_canvas(event):
+    global original_image
+    total_width, total_height = event.width, event.height
+    sidebar_width = sidebar_frame.winfo_width()
+    bottom_height = bottom_frame.winfo_height()
+
+    width = total_width - sidebar_width
+    height = total_height - bottom_height
+
+    # update the size of the canvas
+    canvas.config(width=width, height=height)
+
+    if original_image:
+        # update the size of the displayed image based on the new canvas size
+        resized_image = resize_image_to_fit_canvas(original_image, (width, height))
+        display_image_on_canvas(resized_image)
+    else:
+        display_placeholder_text()
+
+
 # Initialize the Tkinter window and canvas
 root = TkinterDnD.Tk()
 root.title("Stability Studio")
@@ -271,9 +303,9 @@ canvas.bind("<B1-Motion>", draw_mask)
 canvas.bind("<ButtonRelease-1>", lambda event: (setattr(event.widget, "last_x", None),
                                                 setattr(event.widget, "last_y", None)))
 
-
 root.drop_target_register(DND_FILES)
 root.dnd_bind('<<Drop>>', drop)
+canvas.bind("<Configure>", resize_canvas)
 
 sv_ttk.set_theme("light")
 

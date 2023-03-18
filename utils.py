@@ -34,19 +34,41 @@ def resize_with_aspect_ratio_fill(img, target_size):
     img_width, img_height = img.size
     target_width, target_height = target_size
 
-    aspect_ratio = max(target_width / img_width, target_height / img_height)
-    new_width = int(img_width * aspect_ratio)
-    new_height = int(img_height * aspect_ratio)
+    # Calculate aspect ratios
+    img_aspect_ratio = img_width / img_height
+    target_aspect_ratio = target_width / target_height
 
+    if img_aspect_ratio > target_aspect_ratio:
+        # Image is wider than target size, so width should match target size
+        new_width = target_width
+        new_height = int(target_width / img_aspect_ratio)
+    else:
+        # Image is taller than target size, so height should match target size
+        new_width = int(target_height * img_aspect_ratio)
+        new_height = target_height
+
+    # Resize image
     resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
-    result_img = Image.new(img.mode, target_size, color=0 if img.mode == '1' else (255, 255, 255))
 
-    x_offset = (target_width - new_width) // 2
-    y_offset = (target_height - new_height) // 2
-    result_img.paste(resized_img, (x_offset, y_offset))
+    # Add letterboxing if necessary
+    if img_aspect_ratio != target_aspect_ratio:
+        # Calculate letterbox size
+        letterbox_width = target_width - new_width
+        letterbox_height = target_height - new_height
 
-    return result_img
+        # Calculate position of letterboxing
+        letterbox_left = letterbox_width // 2
+        letterbox_right = letterbox_width - letterbox_left
+        letterbox_top = letterbox_height // 2
+        letterbox_bottom = letterbox_height - letterbox_top
 
+        # Create new image with letterboxing
+        letterboxed_img = Image.new(img.mode, target_size, color=(0, 0, 0) if img.mode == 'RGB' else 0)
+        letterboxed_img.paste(resized_img, (letterbox_left, letterbox_top))
+
+        return letterboxed_img
+
+    return resized_img
 
 def remove_whitespace(image):
     image_data = image.load()
