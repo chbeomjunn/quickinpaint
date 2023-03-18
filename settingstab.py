@@ -5,10 +5,10 @@ import os
 class SettingsTab:
     def __init__(self, tab):
         if os.environ.get("STABILITYSTUDIO_GENERATE_MODEL", "") == "":
-            os.environ.set("STABILITYSTUDIO_GENERATE_MODEL", "runwayml/stable-diffusion-inpainting")
+            os.environ["STABILITYSTUDIO_GENERATE_MODEL"] = "runwayml/stable-diffusion-inpainting"
         
         if os.environ.get("STABILITYSTUDIO_UPSCALE_MODEL", "") == "":
-            os.environ.set("STABILITYSTUDIO_UPSCALE_MODEL", "stabilityai/stable-diffusion-x4-upscale")
+            os.environ["STABILITYSTUDIO_UPSCALE_MODEL"] = "stabilityai/stable-diffusion-x4-upscale"
         
         self.tab = tab
 
