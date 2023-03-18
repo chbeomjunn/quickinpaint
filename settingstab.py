@@ -13,12 +13,14 @@ class SettingsTab:
         self.generate_label.grid(row=0, column=0, sticky=tk.W, padx=(0, 10), pady=(0, 10))
 
         self.generate_entry = tk.Entry(self.frame)
+        self.generate_entry.set(os.environ.get("STABILITYSTUDIO_GENERATE_MODEL", ""))
         self.generate_entry.grid(row=0, column=1, pady=(0, 10))
 
         self.upscale_label = tk.Label(self.frame, text="Diffuser Model for Upscale Tab:")
         self.upscale_label.grid(row=1, column=0, sticky=tk.W, padx=(0, 10))
 
         self.upscale_entry = tk.Entry(self.frame)
+        self.upscale_entry.set(os.environ.get("STABILITYSTUDIO_UPSCALE_MODEL", ""))
         self.upscale_entry.grid(row=1, column=1)
 
         self.save_button = tk.Button(self.frame, text="Save Settings", command=self.save_settings)
