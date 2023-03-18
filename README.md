@@ -1,6 +1,5 @@
-# quickinpaint
- SImple python program that allows you to quickly inpaint using RunwayML's stable defusion inpainting model
- Pretty much just an interface for the model, allowing you to easily make a mask over the image.
+# Stable Studio
+Simple Python desktop app allowing you to make use of Huggingface's Diffuser based models. 
  
  ## Capabilities
   - Quickly draw a mask over an image and use a prompt to inpaint into that image
@@ -13,7 +12,9 @@
  
  ## Instructions
   1. Clone the repository
-  2. Install requirements
+  2. Install requirements*
    `python3 -m pip install -r requirements.txt`
   3. Execute program
    `python3 main.py`
+ - For CUDA GPUs, you'll need to follow the instructions on Pytorch's website to install with the appropriate CUDA driver version.
+ - Apple Silicon should work as is.

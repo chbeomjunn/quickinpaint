@@ -1,5 +1,7 @@
 import torch
-from PIL import Image
+from PIL import Image, ImageTk
+import tkinter as tk
+from tkinter import ttk
 
 
 def get_device():
@@ -34,41 +36,31 @@ def resize_with_aspect_ratio_fill(img, target_size):
     img_width, img_height = img.size
     target_width, target_height = target_size
 
-    # Calculate aspect ratios
-    img_aspect_ratio = img_width / img_height
-    target_aspect_ratio = target_width / target_height
-
-    if img_aspect_ratio > target_aspect_ratio:
-        # Image is wider than target size, so width should match target size
-        new_width = target_width
-        new_height = int(target_width / img_aspect_ratio)
+    # Check if one dimension of the image is already equal or larger than the corresponding dimension of the target size
+    if img_width >= target_width or img_height >= target_height:
+        aspect_ratio = max(target_width / img_width, target_height / img_height)
+        new_width = int(img_width * aspect_ratio)
+        new_height = int(img_height * aspect_ratio)
     else:
-        # Image is taller than target size, so height should match target size
-        new_width = int(target_height * img_aspect_ratio)
-        new_height = target_height
+        # Resize the image along the maximum dimension to the corresponding dimension of the target size
+        if img_width > img_height:
+            aspect_ratio = target_width / img_width
+            new_width = target_width
+            new_height = int(img_height * aspect_ratio)
+        else:
+            aspect_ratio = target_height / img_height
+            new_width = int(img_width * aspect_ratio)
+            new_height = target_height
 
-    # Resize image
     resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+    result_img = Image.new(img.mode, target_size, color=0 if img.mode == '1' else (255, 255, 255))
 
-    # Add letterboxing if necessary
-    if img_aspect_ratio != target_aspect_ratio:
-        # Calculate letterbox size
-        letterbox_width = target_width - new_width
-        letterbox_height = target_height - new_height
+    x_offset = (target_width - new_width) // 2
+    y_offset = (target_height - new_height) // 2
+    result_img.paste(resized_img, (x_offset, y_offset))
 
-        # Calculate position of letterboxing
-        letterbox_left = letterbox_width // 2
-        letterbox_right = letterbox_width - letterbox_left
-        letterbox_top = letterbox_height // 2
-        letterbox_bottom = letterbox_height - letterbox_top
+    return result_img
 
-        # Create new image with letterboxing
-        letterboxed_img = Image.new(img.mode, target_size, color=(0, 0, 0) if img.mode == 'RGB' else 0)
-        letterboxed_img.paste(resized_img, (letterbox_left, letterbox_top))
-
-        return letterboxed_img
-
-    return resized_img
 
 def remove_whitespace(image):
     image_data = image.load()
@@ -90,4 +82,78 @@ def remove_whitespace(image):
         return image.crop((left, top, right + 1, bottom + 1))
     else:
         return image
+
+
+def resize_image_to_fit_canvas(img, target_size):
+    img_width, img_height = img.size
+    target_width, target_height = target_size
+
+    aspect_ratio = max(target_width / img_width, target_height / img_height)
+    new_width = int(img_width * aspect_ratio)
+    new_height = int(img_height * aspect_ratio)
+
+    resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+    return resized_img
+
+
+def center_image_on_canvas_para(img, canvas: tk.Canvas):
+    width, height = img.size
+    x_offset = (canvas.winfo_width() - width) // 2
+    y_offset = (canvas.winfo_height() - height) // 2
+    return x_offset, y_offset
+
+
+class ScrollableCanvas(tk.Canvas):
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.image = None
+        self.configure(scrollregion=self.bbox("all"))
+
+        self.bind("<ButtonPress-1>", self._on_button_press)
+        self.bind("<B1-Motion>", self._on_move_press)
+        self.bind("<ButtonRelease-1>", self._on_button_release)
+        # self.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        self._drag_data = {"x": 0, "y": 0}
+
+    def display_image(self, img):
+        x_offset, y_offset = center_image_on_canvas_para(img, self)
+        canvas_image = ImageTk.PhotoImage(img)
+        self.delete("all")
+        self.create_image(x_offset, y_offset, anchor=tk.NW, image=canvas_image, tags="image")
+        self.image = canvas_image
+        self.configure(scrollregion=self.bbox("all"))
+
+    def _on_button_press(self, event):
+        self.scan_mark(event.x, event.y)
+
+    def _on_move_press(self, event):
+        self.scan_dragto(event.x, event.y, gain=1)
+        self.configure(scrollregion=self.bbox("all"))
+
+    def _on_button_release(self, event):
+        pass
+
+    # def _on_mousewheel(self, event):
+    #     self.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+
+class CanvasFrame(tk.Frame):
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        self.canvas = ScrollableCanvas(self, highlightthickness=0)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+
+        self.scrollbar_y = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollbar_y.grid(row=0, column=1, sticky="ns")
+        self.canvas.configure(yscrollcommand=self.scrollbar_y.set)
+
+        self.scrollbar_x = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
+        self.scrollbar_x.grid(row=1, column=0, sticky="ew")
+        self.canvas.configure(xscrollcommand=self.scrollbar_x.set)
+
 
