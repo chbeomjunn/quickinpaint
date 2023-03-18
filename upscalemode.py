@@ -36,7 +36,7 @@ class UpscaleMode:
         self.upscale_button = tk.Button(self.sidebar, text="Upscale Image", command=self.upscale_image)
         self.upscale_button.pack(padx=10, pady=10)
 
-        self.canvas = tk.Canvas(self.tab, width=800, height=800)
+        self.canvas = tk.Canvas(self.tab, width=1024, height=1024)
         self.canvas.pack()
 
         self.load_image_button = tk.Button(self.sidebar, text="Load Image", command=self.load_image)

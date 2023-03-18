@@ -12,7 +12,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from editmode import EditMode
 from settingstab import SettingsTab
 from upscalemode import UpscaleMode
-from utils import get_device, match_mask_size
+from utils import get_device, match_mask_size, resize_with_aspect_ratio_fill
 
 last_x, last_y = None, None
 
@@ -55,23 +55,6 @@ def display_placeholder_text():
 
 
 def resize_image_and_mask(image, mask, target_size=(512, 512)):
-    def resize_with_aspect_ratio_fill(img, target_size):
-        img_width, img_height = img.size
-        target_width, target_height = target_size
-
-        aspect_ratio = min(target_width / img_width, target_height / img_height)
-        new_width = int(img_width * aspect_ratio)
-        new_height = int(img_height * aspect_ratio)
-
-        resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
-        result_img = Image.new(img.mode, target_size, color=0 if img.mode == '1' else (255, 255, 255))
-
-        x_offset = (target_width - new_width) // 2
-        y_offset = (target_height - new_height) // 2
-        result_img.paste(resized_img, (x_offset, y_offset))
-
-        return result_img
-
     resized_image = resize_with_aspect_ratio_fill(image, target_size)
     resized_mask = resize_with_aspect_ratio_fill(mask, target_size)
     return resized_image, resized_mask
@@ -174,7 +157,7 @@ def perform_inpainting():
 
 def perform_inpainting_thread(prompt_text):
     model_id = os.environ.get("STABILITYSTUDIO_GENERATE_MODEL", "runwayml/stable-diffusion-inpainting")
-    pipe = StableDiffusionInpaintPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+    pipe = StableDiffusionInpaintPipeline.from_pretrained(model_id)
     pipe = pipe.to(get_device())
 
     resized_image, resized_mask = resize_image_and_mask(original_image, mask_image)
@@ -191,7 +174,7 @@ def perform_inpainting_thread(prompt_text):
 
     # Unlock the edit  tab and initialize its contents
     notebook.tab(tab2, state="normal")
-    edittab = EditMode(tab2, original_image, result)
+    editmode.update_images(original_image, result)
 
 
 def reset_application():
@@ -207,7 +190,7 @@ def reset_application():
 root = TkinterDnD.Tk()
 root.title("Stability Studio")
 notebook = ttk.Notebook(root)
-tab1 = tk.Frame(notebook, width=800, height=800)
+tab1 = tk.Frame(notebook, width=1024, height=1024)
 tab2 = tk.Frame(notebook)
 tab3 = tk.Frame(notebook)
 tab4 = tk.Frame(notebook)
@@ -281,7 +264,7 @@ for res in available_resolutions:
     )
     resolution_radio.pack(side=tk.TOP)
 
-canvas = tk.Canvas(tab1, width=800, height=800)
+canvas = tk.Canvas(tab1, width=1024, height=1024)
 canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 canvas.bind("<B1-Motion>", draw_mask)
