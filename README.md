@@ -1,4 +1,4 @@
-# Stable Studio
+# Stability Studio
 Simple Python desktop app allowing you to make use of Huggingface's Diffuser based models. 
  
  ## Capabilities
