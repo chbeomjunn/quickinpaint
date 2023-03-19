@@ -1,15 +1,12 @@
 import tkinter as tk
 import os
+import json
 
 
 class SettingsTab:
+    SETTINGS_FILE = "settings.json"
+
     def __init__(self, tab):
-        if os.environ.get("STABILITYSTUDIO_GENERATE_MODEL", "") == "":
-            os.environ["STABILITYSTUDIO_GENERATE_MODEL"] = "runwayml/stable-diffusion-inpainting"
-        
-        if os.environ.get("STABILITYSTUDIO_UPSCALE_MODEL", "") == "":
-            os.environ["STABILITYSTUDIO_UPSCALE_MODEL"] = "stabilityai/stable-diffusion-x4-upscale"
-        
         self.tab = tab
 
         self.frame = tk.Frame(self.tab)
@@ -31,13 +28,27 @@ class SettingsTab:
         self.save_button.grid(row=2, column=0, columnspan=2, pady=(20, 0))
 
         # Load saved settings
-        self.generate_entry.insert(0, os.environ.get("STABILITYSTUDIO_GENERATE_MODEL", ""))
-        self.upscale_entry.insert(0, os.environ.get("STABILITYSTUDIO_UPSCALE_MODEL", ""))    
-    
+        self.load_settings()
+
+    def load_settings(self):
+        if os.path.isfile(self.SETTINGS_FILE):
+            with open(self.SETTINGS_FILE, "r") as f:
+                settings = json.load(f)
+
+            self.generate_entry.insert(0, settings.get("STABILITYSTUDIO_GENERATE_MODEL", ""))
+            self.upscale_entry.insert(0, settings.get("STABILITYSTUDIO_UPSCALE_MODEL", ""))
+        else:
+            self.generate_entry.insert(0, "runwayml/stable-diffusion-inpainting")
+            self.upscale_entry.insert(0, "stabilityai/stable-diffusion-x4-upscale")
 
     def save_settings(self):
         generate_model = self.generate_entry.get()
         upscale_model = self.upscale_entry.get()
 
-        os.environ["STABILITYSTUDIO_GENERATE_MODEL"] = generate_model
-        os.environ["STABILITYSTUDIO_UPSCALE_MODEL"] = upscale_model
+        settings = {
+            "STABILITYSTUDIO_GENERATE_MODEL": generate_model,
+            "STABILITYSTUDIO_UPSCALE_MODEL": upscale_model
+        }
+
+        with open(self.SETTINGS_FILE, "w") as f:
+            json.dump(settings, f)

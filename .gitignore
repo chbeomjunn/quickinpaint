@@ -3,3 +3,4 @@ debuginject.py
 .DS_Store
 __pycache__
 .idea
+settings.json
