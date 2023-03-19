@@ -1,11 +1,12 @@
-# Stable Studio
+# Stability Studio
 Simple Python desktop app allowing you to make use of Huggingface's Diffuser based models. 
  
  ## Capabilities
   - Quickly draw a mask over an image and use a prompt to inpaint into that image
+  - Draw back over the inpainted image with original image to fix artifacts created
  
  ## Coming soon (or never)
-  - Maybe support for other models
+  - ~~Maybe support for other models~~ - Added
   - Fix the drag and drop
   - add an eraser tool because it's annoying. 
  
