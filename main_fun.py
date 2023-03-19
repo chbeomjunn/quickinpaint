@@ -5,14 +5,14 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 from PIL import Image, ImageTk, ImageDraw
+import torch
 from diffusers import StableDiffusionInpaintPipeline
 import threading
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from editmode import EditMode
 from settingstab import SettingsTab
 from upscalemode import UpscaleMode
-from utils import get_device, match_mask_size, resize_with_aspect_ratio_fill, resize_image_to_fit_canvas, \
-    ScrollableCanvas, CanvasFrame
+from utils import get_device, match_mask_size, resize_with_aspect_ratio_fill
 
 last_x, last_y = None, None
 
@@ -46,9 +46,12 @@ def display_image_on_canvas(img, zoom=1):
     x_offset, y_offset = center_image_on_canvas(img)
     canvas_image = ImageTk.PhotoImage(img)
     canvas.display_image(img)
-    canvas.delete("all")
+
+    # keep a reference to the canvas_image object
+    canvas.canvas_image = canvas_image
+
+    canvas.delete("image")
     canvas.create_image(x_offset, y_offset, anchor=tk.NW, image=canvas_image, tags="image")
-    canvas.image = canvas_image
 
 
 def display_placeholder_text():
@@ -83,10 +86,9 @@ def load_image(file_path=None):
         original_image = Image.open(file_path).convert("RGB")
 
         target_resolution = resolution_var.get()
-        # resized_image = resize_image_to_target_resolution(original_image, target_resolution)
+        resized_image = resize_image_to_target_resolution(original_image, target_resolution)
 
-        original_image, mask_image = resize_image_and_mask(original_image,
-                                                           mask_image, (1024, 1024))
+        original_image, mask_image = resize_image_and_mask(resized_image, mask_image, (canvas.winfo_width(), canvas.winfo_height()))
         mask_draw = ImageDraw.Draw(mask_image)
         display_image_on_canvas(original_image)
 
@@ -112,26 +114,14 @@ def smooth_mask_path(points, brush_size):
         mask_draw.line(points, fill="white", width=brush_size, joint='curve')
 
 
+# Modify the draw_mask function as follows:
 def draw_mask(event):
     global last_x, last_y
 
-    if event.type == "4":  # ButtonPress event
-        last_x, last_y = None, None
-
     x, y = event.x, event.y
-    zoom_level = zoom_var.get()
-
-    # Calculate the canvas offsets for the image after applying the zoom level
-    zoomed_width = int(original_image.width * zoom_level)
-    zoomed_height = int(original_image.height * zoom_level)
-    x_offset = (canvas.winfo_width() - zoomed_width) // 2
-    y_offset = (canvas.winfo_height() - zoomed_height) // 2
-
-    x_scroll = canvas.canvasx(0)
-    y_scroll = canvas.canvasy(0)
-
-    x_rel = int((x + x_scroll - x_offset) / zoom_level)
-    y_rel = int((y + y_scroll - y_offset) / zoom_level)
+    x_offset, y_offset = center_image_on_canvas(original_image)
+    x_rel = x - x_offset
+    y_rel = y - y_offset
 
     if 0 <= x_rel < original_image.width and 0 <= y_rel < original_image.height:
         if last_x is not None and last_y is not None:
@@ -146,7 +136,7 @@ def draw_mask(event):
             )
         temp_img = original_image.copy()
         temp_img.paste(mask_image, (0, 0), mask_image)
-        display_image_on_canvas(temp_img, zoom=zoom_level)
+        display_image_on_canvas(temp_img)
 
         last_x, last_y = x_rel, y_rel
 
@@ -172,8 +162,16 @@ def perform_inpainting():
 
 
 def perform_inpainting_thread(prompt_text):
-    
-    model_id = os.environ.get("STABILITYSTUDIO_GENERATE_MODEL", "runwayml/stable-diffusion-inpainting")
+
+    from diffusers.pipelines.stable_diffusion import safety_checker
+
+    def sc(self, clip_input, images) :
+        return images, [False for i in images]
+
+    # edit StableDiffusionSafetyChecker class so that, when called, it just returns the images and an array of True values
+    safety_checker.StableDiffusionSafetyChecker.forward = sc
+
+    model_id = os.environ.get("STABILITYSTUDIO_GENERATE_MODEL", "ImNoOne/f222-inpainting-diffusers")
     pipe = StableDiffusionInpaintPipeline.from_pretrained(model_id)
     pipe = pipe.to(get_device())
 
@@ -203,6 +201,18 @@ def reset_application():
     last_x, last_y = None, None
 
 
+def resize_image_to_fit_canvas(img, target_size):
+    img_width, img_height = img.size
+    target_width, target_height = target_size
+
+    aspect_ratio = max(target_width / img_width, target_height / img_height)
+    new_width = int(img_width * aspect_ratio)
+    new_height = int(img_height * aspect_ratio)
+
+    resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+    return resized_img
+
+
 def resize_canvas(event):
     global original_image
     total_width, total_height = event.width, event.height
@@ -217,17 +227,10 @@ def resize_canvas(event):
 
     if original_image:
         # update the size of the displayed image based on the new canvas size
-        resized_image = resize_with_aspect_ratio_fill(original_image, (width, height))
+        resized_image = resize_image_to_fit_canvas(original_image, (width, height))
         display_image_on_canvas(resized_image)
     else:
         display_placeholder_text()
-
-
-def zoom_image(zoom):
-    if original_image:
-        temp_img = original_image.copy()
-        temp_img.paste(mask_image, (0, 0), mask_image)
-        display_image_on_canvas(temp_img, float(zoom))
 
 
 # Initialize the Tkinter window and canvas
@@ -252,7 +255,7 @@ settingstab = SettingsTab(tab4)
 sidebar_frame = tk.Frame(tab1)
 sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y, anchor=tk.N)
 
-# sidebar
+# buttons
 button_frame = tk.Frame(sidebar_frame)
 button_frame.pack(side=tk.TOP)
 
@@ -263,13 +266,6 @@ clear_mask_button.pack(pady=10)
 
 bottom_frame = tk.Frame(tab1)
 bottom_frame.pack(side=tk.BOTTOM, anchor=tk.W)
-
-zoom_label = tk.Label(button_frame, text="Zoom:")
-zoom_label.pack(pady=5)
-zoom_var = tk.DoubleVar(value=1)
-zoom_slider = tk.Scale(button_frame, from_=0.1, to=5, resolution=0.1,
-                       orient=tk.HORIZONTAL, variable=zoom_var, command=zoom_image)
-zoom_slider.pack(pady=5)
 
 # Add bottom fields
 
@@ -307,7 +303,7 @@ resolution_frame.pack(side=tk.TOP, pady=10)
 resolution_label = tk.Label(resolution_frame, text="Image resolution:")
 resolution_label.pack(side=tk.TOP, pady=5)
 
-resolution_var = tk.IntVar(value=1024)
+resolution_var = tk.IntVar(value=512)
 available_resolutions = [64, 128, 256, 512, 1024, 2048]
 for res in available_resolutions:
     resolution_radio = tk.Radiobutton(
@@ -315,10 +311,8 @@ for res in available_resolutions:
     )
     resolution_radio.pack(side=tk.TOP)
 
-canvas_frame = CanvasFrame(tab1, width=1024, height=1024)
-canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-canvas = canvas_frame.canvas
-
+canvas = tk.Canvas(tab1, width=1024, height=1024)
+canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 canvas.bind("<B1-Motion>", draw_mask)
 canvas.bind("<ButtonRelease-1>", lambda event: (setattr(event.widget, "last_x", None),

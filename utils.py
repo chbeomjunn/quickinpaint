@@ -32,34 +32,52 @@ def match_mask_size(image, mask):
     return resized_mask
 
 
-def resize_with_aspect_ratio_fill(img, target_size):
-    img_width, img_height = img.size
+def resize_with_aspect_ratio_fill(image, target_size):
+    img_width, img_height = image.size
     target_width, target_height = target_size
 
-    # Check if one dimension of the image is already equal or larger than the corresponding dimension of the target size
-    if img_width >= target_width or img_height >= target_height:
-        aspect_ratio = max(target_width / img_width, target_height / img_height)
-        new_width = int(img_width * aspect_ratio)
-        new_height = int(img_height * aspect_ratio)
-    else:
-        # Resize the image along the maximum dimension to the corresponding dimension of the target size
-        if img_width > img_height:
-            aspect_ratio = target_width / img_width
-            new_width = target_width
-            new_height = int(img_height * aspect_ratio)
-        else:
-            aspect_ratio = target_height / img_height
-            new_width = int(img_width * aspect_ratio)
-            new_height = target_height
+    aspect_ratio = min(target_width / img_width, target_height / img_height)
+    new_width = int(img_width * aspect_ratio)
+    new_height = int(img_height * aspect_ratio)
 
-    resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
-    result_img = Image.new(img.mode, target_size, color=0 if img.mode == '1' else (255, 255, 255))
+    resized_image = image.resize((new_width, new_height), Image.ANTIALIAS)
 
+    padded_image = Image.new(image.mode, target_size, color=0 if image.mode == '1' else (255, 255, 255))
     x_offset = (target_width - new_width) // 2
     y_offset = (target_height - new_height) // 2
-    result_img.paste(resized_img, (x_offset, y_offset))
+    padded_image.paste(resized_image, (x_offset, y_offset))
 
-    return result_img
+    return padded_image
+
+
+# def resize_with_aspect_ratio_fill(img, target_size):
+#     img_width, img_height = img.size
+#     target_width, target_height = target_size
+#
+#     # Check if one dimension of the image is already equal or larger than the corresponding dimension of the target size
+#     if img_width >= target_width or img_height >= target_height:
+#         aspect_ratio = max(target_width / img_width, target_height / img_height)
+#         new_width = int(img_width * aspect_ratio)
+#         new_height = int(img_height * aspect_ratio)
+#     else:
+#         # Resize the image along the maximum dimension to the corresponding dimension of the target size
+#         if img_width > img_height:
+#             aspect_ratio = target_width / img_width
+#             new_width = target_width
+#             new_height = int(img_height * aspect_ratio)
+#         else:
+#             aspect_ratio = target_height / img_height
+#             new_width = int(img_width * aspect_ratio)
+#             new_height = target_height
+#
+#     resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+#     result_img = Image.new(img.mode, target_size, color=0 if img.mode == '1' else (255, 255, 255))
+#
+#     x_offset = (target_width - new_width) // 2
+#     y_offset = (target_height - new_height) // 2
+#     result_img.paste(resized_img, (x_offset, y_offset))
+#
+#     return result_img
 
 
 def remove_whitespace(image):
